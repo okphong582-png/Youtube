@@ -18,14 +18,22 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup Xcode Version
+      - name: Setup Xcode 16
         run: |
-          sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode_16.0.app || true
+          for ver in 16.2 16.1 16.0 16; do
+            if [ -d "/Applications/Xcode_${ver}.app" ]; then
+              echo "Selecting Xcode ${ver}"
+              sudo xcode-select -s "/Applications/Xcode_${ver}.app"
+              break
+            fi
+          done
           xcodebuild -version
 
       - name: Resolve Swift Package Manager Dependencies
         run: |
-          xcodebuild -resolvePackageDependencies -project FreeTube.xcodeproj -scheme FreeTube
+          xcodebuild -resolvePackageDependencies \
+            -project FreeTube.xcodeproj \
+            -scheme FreeTube
 
       - name: Build Archive (Unsigned / Ad-Hoc)
         run: |
@@ -44,7 +52,7 @@ jobs:
         run: |
           mkdir -p Payload
           cp -r build/HoangHa.xcarchive/Products/Applications/*.app Payload/
-          zip -r HoangHa.ipa Payload
+          zip -r -q HoangHa.ipa Payload
           ls -lh HoangHa.ipa
 
       - name: Upload IPA Artifact
