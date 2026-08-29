@@ -29,7 +29,7 @@ import JavaScriptCore
 /// Function constructors, JSON). What it can't run: the DOM, fetch, `crypto.subtle`, `setTimeout`
 /// — none of which the n-cipher solver needs.
 @available(iOS 17.0, *)
-nonisolated struct JSEvaluator {
+struct JSEvaluator {
     enum Error: Swift.Error, CustomStringConvertible {
         /// The JavaScript runtime raised an exception during evaluation. Message is from JSC.
         case scriptError(message: String)

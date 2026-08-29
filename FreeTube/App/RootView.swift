@@ -296,7 +296,7 @@ struct RootView: View {
             return
         }
         if let url = current.thumbnailURL {
-            let key = KingfisherManager.shared.cacheKey(for: url)
+            let key = url.absoluteString
             if let cached = KingfisherManager.shared.cache.retrieveImageInMemoryCache(forKey: key) {
                 thumbnail = cached
                 return

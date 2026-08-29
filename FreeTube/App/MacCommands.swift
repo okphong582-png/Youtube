@@ -31,27 +31,23 @@ struct MacCommands: Commands {
 
     var body: some Commands {
         // 1. Replace the standard "App Settings" item (⌘,) with one that selects our
-        // in-window Settings tab instead of opening a separate Settings scene.
+        // in-window Library tab instead of opening a separate Settings scene.
         CommandGroup(replacing: .appSettings) {
-            Button("Settings…") {
-                postTab(.settings)
+            Button("Library…") {
+                postTab(.library)
             }
             .keyboardShortcut(",", modifiers: .command)
         }
 
-        // 2. Navigate menu — quick-jump to tabs. Search lives inside Home now (folded in
-        // from the former dedicated Search tab), so ⌘F also lands on Home — the host's
-        // `.searchable` field is in the navigation bar and focus-able on macOS.
+        // 2. Navigate menu — quick-jump to tabs.
         CommandMenu("Navigate") {
-            Button("Search") { postTab(.search) }
+            Button("Home") { postTab(.home) }
                 .keyboardShortcut("1", modifiers: .command)
-            Button("Find…") { postTab(.search) }
-                .keyboardShortcut("f", modifiers: .command)
-            Button("Library") { postTab(.library) }
+            Button("Shorts") { postTab(.shorts) }
                 .keyboardShortcut("2", modifiers: .command)
-            Button("Link") { postTab(.link) }
+            Button("Subscriptions") { postTab(.subscriptions) }
                 .keyboardShortcut("3", modifiers: .command)
-            Button("Downloads") { postTab(.downloads) }
+            Button("Library") { postTab(.library) }
                 .keyboardShortcut("4", modifiers: .command)
         }
 

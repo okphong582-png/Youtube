@@ -37,7 +37,7 @@ import PythonSupport
 /// `Pop.__init__`). And we don't intercept `node`/`bun`/`quickjs` — yt-dlp's preference
 /// ranks `deno` highest at 1000 and uses it if available, so wiring just deno is enough.
 @available(iOS 17.0, *)
-nonisolated enum PythonJSBridge {
+enum PythonJSBridge {
     private static let log = AppLog(subsystem: "com.leshko.freetube", category: "JSBridge")
 
     /// The fake path we pass as `js_runtimes={'deno': {'path': ...}}` and recognize in our

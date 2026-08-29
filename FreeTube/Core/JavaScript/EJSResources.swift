@@ -15,7 +15,7 @@ import Foundation
 /// our scripts and fall through to no-JS-runtime. When the YoutubeDL-iOS package upgrades
 /// yt-dlp, re-pull `yt-dlp-ejs` from PyPI and bump `version` here.
 @available(iOS 17.0, *)
-nonisolated enum EJSResources {
+enum EJSResources {
     /// Upstream `yt-dlp-ejs` version these JS files came from. Pulled from PyPI 2026-05-19.
     static let version = "0.8.0"
 

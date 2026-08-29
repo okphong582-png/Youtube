@@ -8,7 +8,7 @@ import YouTubeKit
 /// Per CLAUDE.md §6: `YouTubeKit` must not be imported anywhere outside `Core/Networking/`. Domain
 /// types (Video, Channel, …) are mapped from YouTubeKit response types inside the services that
 /// own each response.
-nonisolated final class YouTubeKitClient: @unchecked Sendable {
+final class YouTubeKitClient: @unchecked Sendable {
     static let shared = YouTubeKitClient()
 
     /// Default iOS-client model. Returns HLS manifest URLs when available (great for music videos),

@@ -210,34 +210,19 @@ struct FullScreenPlayer: View {
     /// close but not the same liquid-glass effect.
     @ViewBuilder
     private var closeFullScreenButton: some View {
-        let label = Label("Close", systemImage: "chevron.down")
-            .labelStyle(.titleAndIcon)
-            .font(.body.weight(.semibold))
-            .padding(.horizontal, 24)
-            .padding(.vertical, 10)
-
-        if #available(iOS 26.0, *) {
-            Button {
-                @Bindable var p = player
-                p.fullScreenPresented = false
-            } label: {
-                label
-            }
-            .buttonStyle(.glass)
-            .controlSize(.large)
-            .tint(.primary)
-            .accessibilityLabel("Close full screen player")
-        } else {
-            Button {
-                @Bindable var p = player
-                p.fullScreenPresented = false
-            } label: {
-                label
-                    .background(.regularMaterial, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close full screen player")
+        Button {
+            @Bindable var p = player
+            p.fullScreenPresented = false
+        } label: {
+            Label("Close", systemImage: "chevron.down")
+                .labelStyle(.titleAndIcon)
+                .font(.body.weight(.semibold))
+                .padding(.horizontal, 24)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: Capsule())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Close full screen player")
     }
 
     // MARK: - Lower section: panel vs channel-push
