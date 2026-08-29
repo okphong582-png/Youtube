@@ -1,0 +1,55 @@
+name: Build HoangHa IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build iOS IPA
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Xcode Version
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode_16.0.app || true
+          xcodebuild -version
+
+      - name: Resolve Swift Package Manager Dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies -project FreeTube.xcodeproj -scheme FreeTube
+
+      - name: Build Archive (Unsigned / Ad-Hoc)
+        run: |
+          xcodebuild -project FreeTube.xcodeproj \
+            -scheme FreeTube \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath build/HoangHa.xcarchive \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: Package Application into IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/HoangHa.xcarchive/Products/Applications/*.app Payload/
+          zip -r HoangHa.ipa Payload
+          ls -lh HoangHa.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HoangHa-iOS-IPA
+          path: HoangHa.ipa
+          retention-days: 14
