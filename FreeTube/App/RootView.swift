@@ -91,7 +91,7 @@ struct RootView: View {
             }
             
             // Native YouTube floating mini-player docked above tab bar
-            if player.miniPlayerVisible, let video = player.currentVideo {
+            if player.miniPlayerVisible && !player.fullScreenPresented, let video = player.currentVideo {
                 miniPlayerBar(video: video)
                     .padding(.bottom, 49)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -99,6 +99,7 @@ struct RootView: View {
         }
         .fullScreenCover(isPresented: $player.fullScreenPresented) {
             FullScreenPlayer()
+                .environment(player)
         }
         .sheet(isPresented: $isShowingCreateSheet) {
             createSheetView

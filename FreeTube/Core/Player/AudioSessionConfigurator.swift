@@ -14,9 +14,13 @@ enum AudioSessionConfigurator {
     static func configure() {
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .moviePlayback, options: [])
+            try session.setCategory(
+                .playback,
+                mode: .default,
+                options: [.allowAirPlay, .allowBluetooth, .allowBluetoothA2DP]
+            )
             try session.setActive(true, options: [])
-            log.info("Audio session configured for .playback/.moviePlayback")
+            log.info("Audio session configured for background playback (.playback/.default)")
         } catch {
             log.error("Failed to configure audio session: \(String(describing: error), privacy: .public)")
         }

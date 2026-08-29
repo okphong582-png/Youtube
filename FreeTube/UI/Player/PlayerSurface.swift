@@ -20,6 +20,7 @@ struct PlayerSurface: UIViewControllerRepresentable {
         controller.showsPlaybackControls = showsControls
         controller.canStartPictureInPictureAutomaticallyFromInline = entersPiPAutomatically
         controller.allowsPictureInPicturePlayback = true
+        controller.updatesNowPlayingInfoCenter = false
         return controller
     }
 

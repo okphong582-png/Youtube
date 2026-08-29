@@ -85,6 +85,7 @@ final class PlayerStateManager {
         // pipeline is no longer visible, which manifests as "audio cuts out the moment you collapse
         // the mini-player." Pairs with the `.playback` AVAudioSession configured at launch.
         player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+        player.preventsDisplaySleepDuringVideoPlayback = true
         // Restore the last-used playback speed. `defaultRate` is what `AVPlayerViewController`'s
         // speed menu writes, and `AVPlayer.play()` resumes at this rate (not the transient `rate`).
         // Setting it *before* installObservers keeps the KVO from firing back and re-saving the
@@ -185,6 +186,7 @@ final class PlayerStateManager {
         // from `playNext()` / `playPrevious()` find it already there and just update `currentIndex`.
         queue.setCurrent(video)
         miniPlayerVisible = true
+        fullScreenPresented = true
         loadState = .resolving
         // Wipe transport state from the previous video so a stray time-observer tick during the
         // transition (the periodic callback can fire AFTER currentVideo flips but BEFORE the new
@@ -371,51 +373,60 @@ final class PlayerStateManager {
 
     private func resolveAndPlay(video: Video, autoplay: Bool, skipRecommendations: Bool = false) async {
         log.info("resolveAndPlay: start for \(video.id, privacy: .public)")
-        // Watch the manager's progress dictionary so the player UI can render a real-time progress
-        // bar. Cancelled in `dismiss()` and replaced on each `load`.
-        startProgressObservation(for: video.id)
 
-        // Three-tier playback resolution:
-        //   1. `ensureDownloaded` — yt-dlp into local file, then YouTubeKit progressive fallback
-        //      inside it. Returns a `file://` URL on success.
-        //   2. **HLS streaming** — last resort when every download path is blocked (PoT 403s,
-        //      cipher-decode broken, etc.). `AVPlayerItem(url:)` accepts an HLS master-playlist
-        //      URL identically to a file URL — AVFoundation handles segment fetching itself, so
-        //      we get playback without needing to predownload or decode signature ciphers. The
-        //      trade-off is no local file ⇒ the video isn't watchable offline, doesn't appear in
-        //      Downloads, and doesn't burn cache storage. But it plays.
-        let playbackURL: URL
+        // 1. If the video is already downloaded locally in Documents, play it immediately
+        if let localURL = DownloadManager.shared.localFile(for: video.id) {
+            log.info("resolveAndPlay: local file found \(localURL.path, privacy: .public)")
+            let item = AVPlayerItem(url: localURL)
+            loadItem(item)
+            loadState = .readyToPlay
+            updateNowPlaying()
+            if autoplay { play() }
+            if !skipRecommendations {
+                Task { await fillQueueWithRecommendations(for: video) }
+            }
+            return
+        }
+
+        // 2. Stream online directly via YouTubeKit (HLS master playlist or progressive format)
+        loadState = .resolving
+        if let streamURL = await resolveStreamingURL(videoID: video.id, quality: preferences.preferredQuality) {
+            log.info("resolveAndPlay: direct streaming online from \(streamURL.absoluteString, privacy: .public)")
+            let item = AVPlayerItem(url: streamURL)
+            loadItem(item)
+            loadState = .readyToPlay
+            updateNowPlaying()
+            if autoplay { play() }
+            if !skipRecommendations {
+                Task { await fillQueueWithRecommendations(for: video) }
+            }
+            return
+        }
+
+        // 3. Fallback: only if direct streaming resolution failed, fallback to DownloadManager
+        log.notice("resolveAndPlay: direct stream failed, attempting download fallback for \(video.id, privacy: .public)")
+        startProgressObservation(for: video.id)
         do {
             loadState = .downloading(progress: 0, phase: nil)
-            // `.userInitiated` priority — the user just tapped Play and is actively waiting.
-            // If a long background queue (playlist Download All) is in flight, this jumps the
-            // line so playback starts as soon as the currently-running yt-dlp finishes, instead
-            // of after every queued download.
-            playbackURL = try await DownloadManager.shared.ensureDownloaded(
+            let playbackURL = try await DownloadManager.shared.ensureDownloaded(
                 video: video,
                 quality: preferences.preferredQuality,
                 priority: .userInitiated
             )
-            log.info("resolveAndPlay: local file \(playbackURL.path, privacy: .public)")
-        } catch {
-            log.error("resolveAndPlay: download path FAILED for \(video.id, privacy: .public): \(String(describing: error), privacy: .public) — trying remote stream")
-            if let streamURL = await resolveStreamingURL(videoID: video.id, quality: preferences.preferredQuality) {
-                log.info("resolveAndPlay: streaming \(streamURL.absoluteString, privacy: .public)")
-                playbackURL = streamURL
-            } else {
-                log.error("resolveAndPlay: streaming fallback also unavailable for \(video.id, privacy: .public)")
-                loadState = .failed((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
-                stopProgressObservation()
-                return
+            let item = AVPlayerItem(url: playbackURL)
+            loadItem(item)
+            loadState = .readyToPlay
+            updateNowPlaying()
+            if autoplay { play() }
+            stopProgressObservation()
+            if !skipRecommendations {
+                Task { await fillQueueWithRecommendations(for: video) }
             }
+        } catch {
+            log.error("resolveAndPlay: all resolution attempts failed for \(video.id, privacy: .public): \(String(describing: error), privacy: .public)")
+            loadState = .failed((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+            stopProgressObservation()
         }
-        let item = AVPlayerItem(url: playbackURL)
-        loadItem(item)
-        loadState = .readyToPlay
-        updateNowPlaying()
-        if autoplay { play() }
-        stopProgressObservation()
-        log.info("resolveAndPlay: finished happy-path for \(video.id, privacy: .public)")
         // Fire-and-forget queue fill — uses YouTube's `/next` (WEB) endpoint, independent of the
         // resolver's `/player` (IOS) endpoint, so it can't interfere with playback that's already
         // running. Failures are logged but never surface to the user; queue stays as-is on error.
@@ -484,18 +495,33 @@ final class PlayerStateManager {
     /// player.js scrape — that's our second tier. Returns nil only when all four tiers fail.
     private func resolveStreamingURL(videoID: String, quality: VideoQuality) async -> URL? {
         let service = VideoService()
+        // 1. Try TVHTML5 client first — TVHTML5_SIMPLY_EMBEDDED_PLAYER is exempt from mobile PoT/403 blocks!
+        if let info = try? await service.fetchInfoViaTVHTML5(id: videoID) {
+            if let hls = info.streamingURL { return hls }
+            logFormats(videoID: videoID, source: "TVHTML5", formats: info.formats)
+            if let progressive = Self.pickProgressiveURL(from: info.formats, maxHeight: quality.heightCap ?? .max) {
+                return progressive
+            }
+            if let anyProgressive = info.formats.first(where: { $0.url != nil && $0.containsBothTracks })?.url {
+                return anyProgressive
+            }
+        }
+        // 2. Try iOS client
         if let info = try? await service.fetchInfo(id: videoID) {
             if let hls = info.streamingURL { return hls }
             logFormats(videoID: videoID, source: "IOS", formats: info.formats)
             if let progressive = Self.pickProgressiveURL(from: info.formats, maxHeight: quality.heightCap ?? .max) {
                 return progressive
             }
+            if let anyProgressive = info.formats.first(where: { $0.url != nil && $0.containsBothTracks })?.url {
+                return anyProgressive
+            }
         }
-        if let info = try? await service.fetchInfoViaTVHTML5(id: videoID) {
-            if let hls = info.streamingURL { return hls }
-            logFormats(videoID: videoID, source: "TVHTML5", formats: info.formats)
-            if let progressive = Self.pickProgressiveURL(from: info.formats, maxHeight: quality.heightCap ?? .max) {
-                return progressive
+        // 3. Try info with formats
+        if let infoWithFormats = try? await service.fetchInfoWithFormats(id: videoID) {
+            if let hls = infoWithFormats.info.streamingURL { return hls }
+            if let anyProgressive = infoWithFormats.formats.first(where: { $0.url != nil && $0.containsBothTracks })?.url {
+                return anyProgressive
             }
         }
         return nil

@@ -98,6 +98,10 @@ struct YouTubeVideoCard: View {
             .padding(.top, 12)
             .padding(.bottom, 18)
         }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
+        }
         .background(Color.black)
     }
 }
